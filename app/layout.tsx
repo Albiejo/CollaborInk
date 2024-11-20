@@ -10,6 +10,7 @@ import {
   UserButton
 } from '@clerk/nextjs'
 import { dark } from "@clerk/themes";
+import Provider from "./Provider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -48,7 +49,9 @@ export default function RootLayout({children}: Readonly<{children: React.ReactNo
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Provider>
         {children}
+        </Provider>
       </body>
     </html>
     </ClerkProvider>
