@@ -19,6 +19,7 @@ const Document = async ({params : {id}} : SearchParamProps) => {
   })
 
   if(!room) redirect('/')
+    
   return (
    <main className="flex w-full items-center flex-col">
     <CollabrativeRoom
