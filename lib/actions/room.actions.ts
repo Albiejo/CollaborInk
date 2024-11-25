@@ -3,8 +3,9 @@
 
 import {nanoid} from 'nanoid';
 import { revalidatePath } from 'next/cache';
-import { parseStringify } from '../utils';
+import { getAccessType, parseStringify } from '../utils';
 import {liveblocks} from '../liveblocks'
+import { redirect } from 'next/navigation';
 
 
 export const createDocument = async({userId , email} : CreateDocumentParams)=>{
@@ -25,7 +26,7 @@ export const createDocument = async({userId , email} : CreateDocumentParams)=>{
         const room = await liveblocks.createRoom(roomId, {
            metadata,
            usersAccesses,
-           defaultAccesses :['room:write']
+           defaultAccesses :[]
           });
 
 
@@ -44,10 +45,10 @@ export const createDocument = async({userId , email} : CreateDocumentParams)=>{
 export const getDocument = async({roomId , userId} :{roomId :string  , userId:string})=>{
     try {
         const room = await liveblocks.getRoom(roomId);
-        // const hasAccess = Object.keys(room.usersAccesses).includes(userId)
-        // if(!hasAccess){
-        //     throw new Error('you dont have access to this room');
-        // }
+        const hasAccess = Object.keys(room.usersAccesses).includes(userId)
+        if(!hasAccess){
+            throw new Error('you dont have access to this room');
+        }
         return parseStringify(room);
     } catch (error) {
         console.log(`error occurred while getting into a room :${error}`);
@@ -82,5 +83,70 @@ export const updateDocument = async(roomId:string , title :string)=>{
     } catch (error) {
         console.log("some error occurrred :" , error);
         
+    }
+}
+
+
+export const updateDocumentAccess=async({roomId , email , userType , updatedBy}:ShareDocumentParams)=>{
+    try {
+        
+        const usersAccesses:RoomAccesses = {
+            [email] : getAccessType(userType) as AccessType,
+        }
+
+        const room = await liveblocks.updateRoom(roomId , {usersAccesses})
+        
+        if(room){
+            const notificationID = nanoid()
+            await liveblocks.triggerInboxNotification({
+                userId:email,
+                roomId:roomId,
+                subjectId:notificationID,
+                kind:'$documentAccess',
+                activityData:{
+                    userType,
+                    title:`You have been granted ${userType} access to the document by ${updatedBy.name}`,
+                    updatedBy:updatedBy.name,
+                    avatar:updatedBy.avatar,
+                    email:updatedBy.email
+                }
+            })
+        }
+        revalidatePath(`/document/${roomId}`);
+        return parseStringify(room);
+    } catch (error) {
+        console.log(`error occurred while updating access ${error}`);
+        
+    }
+}
+
+export const removeDocumentAccess = async({email , roomId}: {email:string , roomId:string})=>{
+    try {
+        const room = await liveblocks.getRoom(roomId)
+
+        if(room.metadata.email===email){
+            throw new Error("You cannot remove yourself from the document")
+        }
+
+        const updatedRoom = await liveblocks.updateRoom(roomId , {
+            usersAccesses:{[email]:null}
+        })
+
+        revalidatePath(`/document/${roomId}`)
+        return parseStringify(updatedRoom);
+
+    } catch (error) {
+        console.log("some error occurred" , error)
+    }
+}
+
+
+export const deleteDocument = async(roomId:string)=>{
+    try {
+        await liveblocks.deleteRoom(roomId)
+        revalidatePath('/')
+        redirect('/')
+    } catch (error) {
+        console.log("error occurred while deleting document" , error)
     }
 }
